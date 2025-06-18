@@ -12,7 +12,7 @@ jobs:
   create_github_issue:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4  # ✅ needed for gh CLI to work properly
+      - uses: actions/checkout@v4
 
       - name: Install jq and gh CLI
         run: |
@@ -27,22 +27,25 @@ jobs:
         run: |
           ISSUE_ID="${{ github.event.inputs.issue_id }}"
 
+          # Fetch issue metadata (title, culprit, platform, etc.)
+          ISSUE=$(curl -s -H "Authorization: Bearer $SENTRY_TOKEN" \
+            "https://sentry.io/api/0/issues/$ISSUE_ID/")
+
+          TITLE=$(echo "$ISSUE" | jq -r '.title // "Untitled Sentry Issue"')
+          CULPRIT=$(echo "$ISSUE" | jq -r '.culprit // "unknown"')
+          PLATFORM=$(echo "$ISSUE" | jq -r '.platform // "unknown"')
+          COUNT=$(echo "$ISSUE" | jq -r '.count')
+          PERMALINK=$(echo "$ISSUE" | jq -r '.permalink')
+
+          # Try to get latest event (for stack trace and user/email)
           EVENT=$(curl -s -H "Authorization: Bearer $SENTRY_TOKEN" \
             "https://sentry.io/api/0/issues/$ISSUE_ID/events/latest/")
 
-          if [ "$EVENT" == "null" ] || [ -z "$EVENT" ]; then
-            echo "❌ No event data found for issue ID $ISSUE_ID."
-            exit 1
-          fi
-
-          TITLE=$(echo "$EVENT" | jq -r '.title')
-          CULPRIT=$(echo "$EVENT" | jq -r '.culprit')
-          TIMESTAMP=$(echo "$EVENT" | jq -r '.dateCreated')
-          URL=$(echo "$EVENT" | jq -r '.request.url // "N/A"')
           USER=$(echo "$EVENT" | jq -r '.user.email // "unknown"')
-          PLATFORM=$(echo "$EVENT" | jq -r '.platform')
+          URL=$(echo "$EVENT" | jq -r '.request.url // "N/A"')
+          TIMESTAMP=$(echo "$EVENT" | jq -r '.dateCreated // "N/A"')
 
-          HAS_FRAMES=$(echo "$EVENT" | jq '.exception.values[0].stacktrace.frames != null')
+          HAS_FRAMES=$(echo "$EVENT" | jq '.exception.values[0].stacktrace.frames != null' 2>/dev/null)
           if [ "$HAS_FRAMES" = "true" ]; then
             TRACE=$(echo "$EVENT" | jq -r '
               .exception.values[0].stacktrace.frames 
@@ -55,7 +58,7 @@ jobs:
 
           echo "### 🐞 Sentry Bug Report" > body.txt
           echo "" >> body.txt
-          echo "**Sentry Issue:** https://sentry.io/organizations/$SENTRY_ORG/issues/$ISSUE_ID/" >> body.txt
+          echo "**Sentry Issue:** $PERMALINK" >> body.txt
           echo "" >> body.txt
           echo "- **Title**: $TITLE" >> body.txt
           echo "- **Timestamp**: $TIMESTAMP" >> body.txt
@@ -63,6 +66,7 @@ jobs:
           echo "- **Platform**: $PLATFORM" >> body.txt
           echo "- **User**: $USER" >> body.txt
           echo "- **URL**: $URL" >> body.txt
+          echo "- **Event Count**: $COUNT" >> body.txt
           echo "" >> body.txt
           echo "**Stack trace (last 3 frames):**" >> body.txt
           echo '```' >> body.txt
