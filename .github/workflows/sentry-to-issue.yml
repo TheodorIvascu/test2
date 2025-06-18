@@ -12,11 +12,15 @@ jobs:
   create_github_issue:
     runs-on: ubuntu-latest
     steps:
-      - name: Get latest event from Sentry
+      - name: Create GitHub issue from Sentry issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
         run: |
           ISSUE_ID="${{ github.event.inputs.issue_id }}"
 
-          EVENT=$(curl -s -H "Authorization: Bearer ${{ secrets.SENTRY_TOKEN }}" \
+          EVENT=$(curl -s -H "Authorization: Bearer $SENTRY_TOKEN" \
             "https://sentry.io/api/0/issues/$ISSUE_ID/events/latest/")
 
           TITLE=$(echo "$EVENT" | jq -r '.title')
@@ -29,7 +33,7 @@ jobs:
 
           BODY="### 🐞 Sentry Bug Report
 
-**Sentry Issue:** https://sentry.io/organizations/${{ secrets.SENTRY_ORG }}/issues/$ISSUE_ID/
+**Sentry Issue:** https://sentry.io/organizations/$SENTRY_ORG/issues/$ISSUE_ID/
 
 - **Title**: $TITLE
 - **Timestamp**: $TIMESTAMP
@@ -43,9 +47,4 @@ jobs:
 $TRACE
 \`\`\`"
 
-          echo "$BODY"
-
-          gh issue create --title "$TITLE" --body "$BODY" --label "bug"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
+          gh issue create --title "$TITLE" --body "$BODY"
