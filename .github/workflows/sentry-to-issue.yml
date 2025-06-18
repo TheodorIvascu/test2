@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       issue_id:
-        description: 'Sentry Issue ID (from URL, e.g. 1234567890)'
+        description: 'Sentry Issue ID (e.g. 45142381)'
         required: true
         type: string
 
@@ -12,7 +12,7 @@ jobs:
   create_github_issue:
     runs-on: ubuntu-latest
     steps:
-      - name: Install jq and gh (GitHub CLI)
+      - name: Install jq and gh CLI
         run: |
           sudo apt-get update
           sudo apt-get install -y jq gh
@@ -34,7 +34,13 @@ jobs:
           URL=$(echo "$EVENT" | jq -r '.request.url // "N/A"')
           USER=$(echo "$EVENT" | jq -r '.user.email // "unknown"')
           PLATFORM=$(echo "$EVENT" | jq -r '.platform')
-          TRACE=$(echo "$EVENT" | jq -r '.exception.values[0].stacktrace.frames | map("\(.function) in \(.filename):\(.lineno)") | .[-3:] | join("\n")')
+
+          TRACE=$(echo "$EVENT" | jq -r '
+            try .exception.values[0].stacktrace.frames 
+            | map("\(.function // "unknown") in \(.filename // "unknown"):\(.lineno // 0)") 
+            | .[-3:] 
+            | join("\n") 
+            catch "No stack trace available."')
 
           echo "### 🐞 Sentry Bug Report" > body.txt
           echo "" >> body.txt
