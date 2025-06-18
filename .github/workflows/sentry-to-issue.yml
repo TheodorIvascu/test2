@@ -12,7 +12,7 @@ jobs:
   create_github_issue:
     runs-on: ubuntu-latest
     steps:
-      - name: Create GitHub issue from Sentry issue
+      - name: Create GitHub issue from Sentry
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
@@ -47,4 +47,5 @@ jobs:
 $TRACE
 \`\`\`"
 
-          gh issue create --title "$TITLE" --body "$BODY"
+          echo "$BODY" > body.txt
+          gh issue create --title "$TITLE" --body-file body.txt
