@@ -28,6 +28,11 @@ jobs:
           EVENT=$(curl -s -H "Authorization: Bearer $SENTRY_TOKEN" \
             "https://sentry.io/api/0/issues/$ISSUE_ID/events/latest/")
 
+          if [ "$EVENT" == "null" ] || [ -z "$EVENT" ]; then
+            echo "❌ No event data found for issue ID $ISSUE_ID."
+            exit 1
+          fi
+
           TITLE=$(echo "$EVENT" | jq -r '.title')
           CULPRIT=$(echo "$EVENT" | jq -r '.culprit')
           TIMESTAMP=$(echo "$EVENT" | jq -r '.dateCreated')
@@ -35,12 +40,16 @@ jobs:
           USER=$(echo "$EVENT" | jq -r '.user.email // "unknown"')
           PLATFORM=$(echo "$EVENT" | jq -r '.platform')
 
-          TRACE=$(echo "$EVENT" | jq -r '
-            try .exception.values[0].stacktrace.frames 
-            | map("\(.function // "unknown") in \(.filename // "unknown"):\(.lineno // 0)") 
-            | .[-3:] 
-            | join("\n") 
-            catch "No stack trace available."')
+          HAS_FRAMES=$(echo "$EVENT" | jq '.exception.values[0].stacktrace.frames != null')
+          if [ "$HAS_FRAMES" = "true" ]; then
+            TRACE=$(echo "$EVENT" | jq -r '
+              .exception.values[0].stacktrace.frames 
+              | map("\(.function // "unknown") in \(.filename // "unknown"):\(.lineno // 0)") 
+              | .[-3:] 
+              | join("\n")')
+          else
+            TRACE="No stack trace available."
+          fi
 
           echo "### 🐞 Sentry Bug Report" > body.txt
           echo "" >> body.txt
