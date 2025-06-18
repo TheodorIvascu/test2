@@ -1,0 +1,51 @@
+name: Create GitHub Issue from Sentry
+
+on:
+  workflow_dispatch:
+    inputs:
+      issue_id:
+        description: 'Sentry Issue ID (from URL)'
+        required: true
+        type: string
+
+jobs:
+  create_github_issue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get latest event from Sentry
+        run: |
+          ISSUE_ID="${{ github.event.inputs.issue_id }}"
+
+          EVENT=$(curl -s -H "Authorization: Bearer ${{ secrets.SENTRY_TOKEN }}" \
+            "https://sentry.io/api/0/issues/$ISSUE_ID/events/latest/")
+
+          TITLE=$(echo "$EVENT" | jq -r '.title')
+          CULPRIT=$(echo "$EVENT" | jq -r '.culprit')
+          TIMESTAMP=$(echo "$EVENT" | jq -r '.dateCreated')
+          URL=$(echo "$EVENT" | jq -r '.request.url // "N/A"')
+          USER=$(echo "$EVENT" | jq -r '.user.email // "unknown"')
+          PLATFORM=$(echo "$EVENT" | jq -r '.platform')
+          TRACE=$(echo "$EVENT" | jq -r '.exception.values[0].stacktrace.frames | map("\(.function) in \(.filename):\(.lineno)") | .[-3:] | join("\n")')
+
+          BODY="### 🐞 Sentry Bug Report
+
+**Sentry Issue:** https://sentry.io/organizations/${{ secrets.SENTRY_ORG }}/issues/$ISSUE_ID/
+
+- **Title**: $TITLE
+- **Timestamp**: $TIMESTAMP
+- **Culprit**: $CULPRIT
+- **Platform**: $PLATFORM
+- **User**: $USER
+- **URL**: $URL
+
+**Stack trace (last 3 frames):**
+\`\`\`
+$TRACE
+\`\`\`"
+
+          echo "$BODY"
+
+          gh issue create --title "$TITLE" --body "$BODY" --label "bug"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
