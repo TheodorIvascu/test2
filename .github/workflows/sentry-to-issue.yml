@@ -12,6 +12,8 @@ jobs:
   create_github_issue:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4  # ✅ needed for gh CLI to work properly
+
       - name: Install jq and gh CLI
         run: |
           sudo apt-get update
