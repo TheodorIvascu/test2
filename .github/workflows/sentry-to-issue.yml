@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       issue_id:
-        description: 'Sentry Issue ID (from the URL)'
+        description: 'Sentry Issue ID (from URL, e.g. 1234567890)'
         required: true
         type: string
 
@@ -12,6 +12,11 @@ jobs:
   create_github_issue:
     runs-on: ubuntu-latest
     steps:
+      - name: Install jq and gh (GitHub CLI)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq gh
+
       - name: Create GitHub issue from Sentry
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -31,24 +36,20 @@ jobs:
           PLATFORM=$(echo "$EVENT" | jq -r '.platform')
           TRACE=$(echo "$EVENT" | jq -r '.exception.values[0].stacktrace.frames | map("\(.function) in \(.filename):\(.lineno)") | .[-3:] | join("\n")')
 
-          BODY=$(cat <<EOF
-### 🐞 Sentry Bug Report
+          echo "### 🐞 Sentry Bug Report" > body.txt
+          echo "" >> body.txt
+          echo "**Sentry Issue:** https://sentry.io/organizations/$SENTRY_ORG/issues/$ISSUE_ID/" >> body.txt
+          echo "" >> body.txt
+          echo "- **Title**: $TITLE" >> body.txt
+          echo "- **Timestamp**: $TIMESTAMP" >> body.txt
+          echo "- **Culprit**: $CULPRIT" >> body.txt
+          echo "- **Platform**: $PLATFORM" >> body.txt
+          echo "- **User**: $USER" >> body.txt
+          echo "- **URL**: $URL" >> body.txt
+          echo "" >> body.txt
+          echo "**Stack trace (last 3 frames):**" >> body.txt
+          echo '```' >> body.txt
+          echo "$TRACE" >> body.txt
+          echo '```' >> body.txt
 
-**Sentry Issue:** https://sentry.io/organizations/$SENTRY_ORG/issues/$ISSUE_ID/
-
-- **Title**: $TITLE
-- **Timestamp**: $TIMESTAMP
-- **Culprit**: $CULPRIT
-- **Platform**: $PLATFORM
-- **User**: $USER
-- **URL**: $URL
-
-**Stack trace (last 3 frames):**
-\`\`\`
-$TRACE
-\`\`\`
-EOF
-)
-
-          echo "$BODY" > body.txt
           gh issue create --title "$TITLE" --body-file body.txt
